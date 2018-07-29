@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Cobre Editor</title>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.39.2/codemirror.min.css" />
+  <style type="text/css">
+    html {
+      font-size: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      height: 100%;
+      font: 1em sans-serif;
+      margin: 0;
+      padding: 0;
+      display:flex;
+      flex-direction:column;
+    }
+
+    header {
+      background: #eee;
+      border-bottom: 1px solid #aaa;
+      display: flex;
+      padding: 0.4em 0.6em;
+    }
+
+    #content {
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      overflow: auto;
+    }
+
+    #editor { width: 50%; }
+    #output {
+      width: 50%;
+      font-family: monospace;
+      white-space: pre;
+      border-left: 1px solid #ddd;
+      overflow: auto;
+    }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+
+<header>
+  <button onclick="compileCode()">Run</button>
+  <button onclick="compileCode(true)">Compile to JS</button>
+  <button onclick="output.textContent = ''">Clear</button>
+  <select onchange="selectSample(this)">
+    <option value="info" selected>Info</option>
+    <option value="bottles">Bottles</option>
+    <option value="division">Division</option>
+    <option value="parse">Parse</option>
+    <option value="oop">OOP</option>
+  </select>
+</header>
+
+<div id="content">
+  <div id="editor"></div>
+  <div id="output"></div>
+</div>
+
+<script type="text/lua" id="info-sample">
+  --[[
+  Cobre project: https://github.com/Arnaz87/cobrevm
+  Lua compiler: https://github.com/Arnaz87/culua
+  Cobre browser implementation: https://github.com/Arnaz87/cobreweb
+
+  The lua runtime is not yet optimized so this implementation is slow
+  (some operations that are supposed to be O(1) are O(n)), also the
+  compiler is written in lua itself so...
+
+  Not yet implemented:
+  - Floating point
+  - String comparison
+  - Bitwise operations
+  - Most of the string functions
+  ]]
+
+  print('hello world')
+</script>
+
+<script type="text/lua" id="bottles-sample">
+  -- http://rosettacode.org/wiki/99_Bottles_of_Beer#Lua
+
+  local bottles = 99
+   
+  local function plural (bottles) if bottles == 1 then return '' end return 's' end
+  while bottles > 0 do
+      print (bottles..' bottle'..plural(bottles)..' of beer on the wall')
+      print (bottles..' bottle'..plural(bottles)..' of beer')
+      print ('Take one down, pass it around')
+      bottles = bottles - 1
+      print (bottles..' bottle'..plural(bottles)..' of beer on the wall')
+      print ()
+  end
+</script>
+
+<script type="text/lua" id="division-sample">
+  -- Division by repeated subtraction
+
+  function div (num, denom)
+      local rem, quot = num, 0
+      while rem >= denom do
+          rem = rem-denom
+          quot = quot+1
+      end
+      return quot, rem
+  end
+
+  local num = 10
+  local denom = 3
+
+  if denom == 0 then
+      print("Division by zero!")
+  else
+      local quot, rem = div(num, denom)
+      print(num .. "/" .. denom .. " = " .. quot .. " rem " .. rem)
+  end
+</script>
+
+<script type="text/lua" id="parse-sample">
+  -- The compiler itself is loaded on the browser, so it's modules are available
+
+  local Parser = require("lua_parser.parser")
+
+  function tostr (obj, level, pre)
+      level = level or 1
+      pre = pre or ""
+      if type(obj) ~= "table" or level == 0 then return tostring(obj) end
+
+      local first = true
+      local str = "{"
+      for k, v in pairs(obj) do
+          if first then first = false
+          else str = str .. "," end
+          str = str .. "\n" .. pre .. "  " .. tostring(k) .. " = " .. tostr(v, level-1, pre .. "  ")
+      end
+      str = str .. "\n" .. pre .. "}"
+      if first then return "[]" end
+      return str
+  end
+
+  Parser.open("local y = x + 1")
+  local ast = Parser.parse()
+  print(tostr(ast, 5))
+</script>
+
+<script type="text/lua" id="oop-sample">
+  -- Taken from moonshine's example
+
+  local Account = { balance = 0 }
+
+  function Account:new (o)
+      o = o or {} -- create object if user does not provide one
+      setmetatable(o, self)
+      self.__index = self
+      return o
+  end
+
+  -- Showing off
+  function sum (...)
+      local r = 0
+      for _, v in ipairs{...} do
+          r = r + v
+      end
+      return r
+  end
+
+  function Account.withdraw (self, ...)
+      self.balance = self.balance - sum(...)
+  end
+
+  function Account.deposit (self, ...)
+      self.balance = self.balance + sum(...)
+  end
+
+  a = Account:new{balance = 0}
+  a:deposit(100, 5, 2)
+  print(a.balance)  --> 107
+
+  b = Account:new()
+  print(b.balance)  --> 0
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.39.2/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.39.2/mode/lua/lua.min.js"></script>
+<script type="text/javascript">
+  var editorDiv = document.getElementById("editor")
+  var editor = CodeMirror(editorDiv, {
+    value: "print('Hola Mundo')",
+    mode: "lua",
+    indentUnit: 4,
+    tabSize: 4,
+    lineNumbers: true,
+  })
+  editor.setSize("100%", "100%")
+</script>
+
+<script src="cobre.js"></script>
+<script src="culua.js"></script>
+<script type="text/javascript">
+
+  Cobre.system.println = function (msg) {
+    output.appendChild(document.createTextNode(msg + "\n"))
+  }
+
+  var lua = Cobre.$import("lua")
+  var next = lua.get("next\x1dStack")
+  var lua_g = lua.get("get_global")()
+
+  var fnT = lua.get("Function").resolve()
+  var lua_main = Cobre.$import("culua\x1fcompile").get("lua_main");
+  var stack = lua_main(lua_g)
+  var lua_compile = fnT.unwrap(next(stack))
+
+  function compileCode (printIt) {
+    var src = editor.getValue()
+
+    var newStack = lua.get("newStack")
+    var push = lua.get("push\x1dStack")
+    var next = lua.get("next\x1dStack")
+
+    var arr = []
+    function fn (stack) {
+      arr.push(Cobre.Int.unwrap(next(stack)))
+      return newStack()
+    }
+
+    var stack = newStack()
+    push(stack, Cobre.String.wrap(src))
+    push(stack, fnT.wrap(fn))
+
+    try {
+      lua_compile(stack)
+      var js = Cobre.compile(new Uint8Array(arr), "main")
+
+      if (printIt) {
+        output.textContent += js
+      } else {
+        eval(js)
+        Cobre.$import("main").get("main")()
+      }
+    } catch (e) {
+      var span = document.createElement("span")
+      span.className = "error"
+      span.textContent = e.toString() + "\n" + e.stack
+      output.appendChild(span)
+      throw e
+    }
+
+  }
+
+  function selectSample (elem) {
+    var name
+    if (typeof elem === "string") name = elem
+    else var name = elem.options[elem.selectedIndex].value
+
+    var script = document.getElementById(name + "-sample")
+
+    var lines = script.textContent.split("\n")
+    while (lines[0] == "") lines.shift()
+    while (lines[lines.length-1] == "") lines.pop()
+
+    var indent = lines[0].match(/^\s*/)[0].length
+
+    for (var i = 0; i < lines.length; i++)
+      lines[i] = lines[i].slice(indent)
+
+    editor.setValue(lines.join("\n"))
+  }
+
+  selectSample("info")
+</script>
+
+</body>
+</html>
